@@ -1,0 +1,123 @@
+residue31 = {'ALA': 'A', 'CYS': 'C', 'ASP': 'D', 'GLU': 'E', 'PHE': 'F',
+             'GLY': 'G', 'HIS': 'H', 'ILE': 'I', 'LYS': 'K', 'LEU': 'L',
+             'MET': 'M', 'ASN': 'N', 'PRO': 'P', 'GLN': 'Q', 'ARG': 'R',
+             'SER': 'S', 'THR': 'T', 'VAL': 'V', 'TRP': 'W', 'TYR': 'Y',
+             'ASX': 'N', 'GLX': 'Q', 'UNK': 'X', 'INI': 'K', 'AAR': 'R',
+             'ACE': 'X', 'ACY': 'G', 'AEI': 'T', 'AGM': 'R', 'ASQ': 'D',
+             'AYA': 'A', 'BHD': 'D', 'CAS': 'C', 'CAY': 'C', 'CEA': 'C',
+             'CGU': 'E', 'CME': 'C', 'CMT': 'C', 'CSB': 'C', 'CSD': 'C',
+             'CSE': 'C', 'CSO': 'C', 'CSP': 'C', 'CSS': 'C', 'CSW': 'C',
+             'CSX': 'C', 'CXM': 'M', 'CYG': 'C', 'CYM': 'C', 'DOH': 'D',
+             'EHP': 'F', 'FME': 'M', 'FTR': 'W', 'GL3': 'G', 'H2P': 'H',
+             'HIC': 'H', 'HIP': 'H', 'HTR': 'W', 'HYP': 'P', 'KCX': 'K',
+             'LLP': 'K', 'LLY': 'K', 'LYZ': 'K', 'M3L': 'K', 'MEN': 'N',
+             'MGN': 'Q', 'MHO': 'M', 'MHS': 'H', 'MIS': 'S', 'MLY': 'K',
+             'MLZ': 'K', 'MSE': 'M', 'NEP': 'H', 'NPH': 'C', 'OCS': 'C',
+             'OCY': 'C', 'OMT': 'M', 'OPR': 'R', 'PAQ': 'Y', 'PCA': 'Q',
+             'PHD': 'D', 'PRS': 'P', 'PTH': 'Y', 'PYX': 'C', 'SEP': 'S',
+             'SMC': 'C', 'SME': 'M', 'SNC': 'C', 'SNN': 'D', 'SVA': 'S',
+             'TPO': 'T', 'TPQ': 'Y', 'TRF': 'W', 'TRN': 'W', 'TRO': 'W',
+             'TYI': 'Y', 'TYN': 'Y', 'TYQ': 'Y', 'TYS': 'Y', 'TYY': 'Y',
+             'YOF': 'Y', 'FOR': 'X', '---': '-', 'PTR': 'Y', 'LCX': 'K',
+             'SEC': 'D', 'MCL': 'K', 'LDH': 'K'}
+
+residue20 = ['ALA', 'ARG', 'ASN', 'ASP', 'CYS', 'GLN', 'GLU', 'GLY', 'HIS', 'ILE',
+             'LEU', 'LYS', 'MET', 'PHE', 'PRO', 'SER', 'THR', 'TRP', 'TYR', 'VAL']
+
+residue13 = {'A': 'ALA', 'R': 'ARG', 'N': 'ASN', 'D': 'ASP', 'C': 'CYS',
+             'Q': 'GLN', 'E': 'GLU', 'G': 'GLY', 'H': 'HIS', 'I': 'ILE',
+             'L': 'LEU', 'K': 'LYS', 'M': 'MET', 'F': 'PHE', 'P': 'PRO',
+             'S': 'SER', 'T': 'THR', 'W': 'TRP', 'Y': 'TYR', 'V': 'VAL',
+             'X': 'UNK'}
+
+Amino_type = "ARNDCQEGHILKMFPSTWYVX"
+
+
+import numpy as np
+
+input_file = 'pdb_file.pdb' # input pdb file
+fp = open(input_file)
+lines = fp.readlines()
+fp.close()
+
+chain_dict = dict()
+chain_seq_dict = dict()
+chain_CA_dict = dict() # alpha carbon
+chain_CB_dict = dict() # beta carbon
+
+check = False
+for line in lines:
+    if line[0:10] == 'REMARK 465':
+        if line[15:27] == 'RES C SSSEQI':
+            check = True
+            continue
+        if not check :
+            continue
+        residue = line[15:18]
+        chain_id = line[19]
+        residue_num = line[22:26]
+        insertion_code = line[26]
+        residue_num2 = line[22:27]
+
+        if chain_id not in chain_dict:
+            chain_dict[chain_id] = dict()
+            chain_CA_dict[chain_id] = dict()
+            chain_CB_dict[chain_id] = dict()
+        chain_dict[chain_id][residue_num2] = residue
+    if line[0:6] == 'ATOM  ':
+        residue = line[17:20]
+        chain_id = line[21]
+        residue_num = line[22:26]
+        residue_num2 = line[22:27]
+        atom_type = line[12:16]
+
+        if chain_id not in chain_dict:
+            chain_dict[chain_id] = dict()
+            chain_CA_dict[chain_id] = dict()
+            chain_CB_dict[chain_id] = dict()
+        if residue_num2 not in chain_dict[chain_id]:
+            chain_dict[chain_id][residue_num2] = residue
+        if atom_type == ' CA ': # alpha carbon
+            position = np.array([float(line[30:38]),float(line[38:46]),float(line[46:54])])
+            chain_CA_dict[chain_id][residue_num2] = position
+            if residue == 'GLY' : # Glycine has no beta carbon -> CA == CB -> cancelled in the end for the side chain vector
+                chain_CB_dict[chain_id][residue_num2] = position
+        if atom_type == ' CB ' : # beta carbon
+            position = np.array([float(line[30:38]),float(line[38:46]),float(line[46:54])]) # transformation for (x, y, z) coordination 
+            chain_CB_dict[chain_id][residue_num2] = position
+        
+#print(chain_dict)
+
+for chain_id in chain_dict.keys():
+    residue_num_list = sorted(chain_dict[chain_id].keys())
+    for residue_num2 in residue_num_list:
+        if residue_num2 not in chain_CB_dict[chain_id]:
+            print(residue_num2, chain_dict[chain_id][residue_num2], 'missing')
+            continue
+        print(residue_num2, chain_dict[chain_id][residue_num2], chain_CB_dict[chain_id][residue_num2])
+
+### pdb to distance map (missing residue, ATOM )
+'''
+for chain_id in chain_dict.keys():
+    res_num_list = sorted(chain_dict[chain_id].keys())
+    num_res = len(res_num_list)
+    dist_map = np.full([num_res,num_res], 100.0)
+    for i in range(num_res):
+        res_num2i = res_num_list[i]
+        if res_num2i not in chain_CB_dict[chain_id]:
+            continue
+        pos1 = chain_CB_dict[chain_id][res_num2i]
+        dist_map[i][i] = 0
+        for j in range(i+1, num_res):
+            res_num2j = res_num_list[j]
+            if res_num2j not in chain_CB_dict[chain_id]:
+                continue
+            pos2 = chain_CB_dict[chain_id][res_num2j]
+            dist = np.linalg.norm(pos2 - pos1)
+            dist_map[i][j] = dist
+            dist_map[j][i] = dist
+#print(dist_map[:10,:10])
+
+import matplotlib.pyplot as plt
+fig = plt.imshow(dist_map)
+'''
