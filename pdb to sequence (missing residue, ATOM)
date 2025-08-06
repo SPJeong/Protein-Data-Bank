@@ -1,0 +1,40 @@
+input_file = 'pdb_file.pdb' # input file
+fp = open(input_file)
+lines = fp.readlines()
+fp.close()
+
+chain_dict = dict()
+chain_seq_dict = dict()
+check = False
+for line in lines:
+    if line[0:10] == 'REMARK 465':
+        if line[15:27] == 'RES C SSSEQI':
+            check = True
+            continue
+        if not check :
+            continue
+        res = line[15:18]
+        chain_id = line[19]
+        res_num = line[22:26]
+        insertion_code = line[26]
+        res_num2 = line[22:27]
+
+        if chain_id not in chain_dict:
+            chain_dict[chain_id] = dict()
+        chain_dict[chain_id][res_num2] = res
+    if line[0:6] == 'ATOM  ':
+        res = line[17:20]
+        chain_id = line[21]
+        res_num = line[22:26]
+        res_num2 = line[22:27]
+        if chain_id not in chain_dict:
+            chain_dict[chain_id] = dict()
+        if res_num2 not in chain_dict[chain_id]:
+            chain_dict[chain_id][res_num2] = res
+
+#print(chain_dict)
+#print(tuple(chain_dict['A'].values()))
+
+res_num_list = sorted(chain_dict['A'].keys())
+for res_num2 in res_num_list:
+    print(res_num2, chain_dict['A'][res_num2])
