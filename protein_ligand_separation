@@ -1,0 +1,160 @@
+### read pdb file
+input_file = 'pdb_file.pdb' # input pdb file
+fp = open(input_file)
+lines = fp.readlines()
+fp.close()
+
+chain_dict = dict()
+chain_seq_dict = dict()
+chain_ligand_dict = dict()
+connect_dict = dict()
+mod_residue_dict = dict() # modified residue dictionary
+
+check = False
+protein_line_list = list()
+ligand_line_dict = dict()
+
+for line in lines:
+    if line[0:10] == 'REMARK 465': # for missing residue
+        if line[15:27] == 'RES C SSSEQI':
+            check = True
+            continue
+        if not check :
+            continue
+        residue = line[15:18]
+        chain_id = line[19]
+        residue_num = line[22:26]
+        insertion_code = line[26]
+        residue_num2 = line[22:27]
+
+        if chain_id not in chain_dict:
+            chain_dict[chain_id] = dict()
+
+        chain_dict[chain_id][residue_num2] = residue
+    if line[0:6] == 'MODRES': # MODRES: modified residues, e.g. mutated residue
+        residue_name_mod = line[12:15]
+        chain_id = line[17]
+        residue_num = line[18:22]
+        residue_num2 = line[18:23]
+        residue_name_o = line[24:27] # residue_name_o: original residue name before residue modification
+        if chain_id not in mod_residue_dict :
+            mod_residue_dict[chain_id] = dict()
+        if residue_name_mod not in mod_residue_dict[chain_id]:
+            mod_residue_dict[chain_id][residue_name_mod] = list()
+        mod_residue_dict[chain_id][residue_name_mod] += [[residue_num2, residue_name_o]]
+
+    if line[0:6] == 'ATOM  ':
+        residue = line[17:20]
+        chain_id = line[21]
+        residue_num = line[22:26]
+        residue_num2 = line[22:27]
+        atom_type = line[12:16]
+
+        protein_line_list += [line]
+
+    if line[0:6] == 'HETATM':
+        residue = line[17:20]
+        chain_id = line[21]
+        residue_num = line[22:26]
+        residue_num2 = line[22:27]
+        atom_type = line[12:16]
+        if chain_id in mod_residue_dict:
+            if residue in mod_residue_dict[chain_id] :
+                protein_line_list += [line]
+                continue
+        if residue not in ligand_line_dict:
+            ligand_line_dict[residue] = list()
+        ligand_line_dict[residue] += [line]
+
+    if line[0:6] == 'CONECT':
+        connect_list = []
+        for i in range(0, 8):
+            initial = i * 5 + 6
+            final = (i + 1) * 5 + 6
+            atom_number = line[initial:final].strip()
+            if len(atom_number) > 0:
+                connect_list += [int(atom_number)]
+        connect_idx = connect_list[0]
+        if connect_idx not in connect_dict:
+            connect_dict[connect_idx] = connect_list[1:]
+        else:
+            connect_dict[connect_idx] = connect_dict[connect_idx] + connect_list[1:]
+
+#print("chain_dict: " + chain_dict)
+#print("chain_seq_dict: " + chain_seq_dict)
+#print("chain_ligand_dict: " + chain_ligand_dict)
+#print("connect_dict: " + connect_dict)
+#print("mod_residue_dict: " + mod_residue_dict)
+#print("protein_line_list: " + protein_line_list)
+#print("ligand_line_dict: " + ligand_line_dict)
+
+### protein file save
+protein_file = 'save_protein_name.pdb' # save protein after protein-ligand separation 
+fp_p = open(protein_file, 'w')
+
+molecule_atom_numbers = list()
+for line in protein_line_list :
+    fp_p.write(line)
+    atom_number = int(line[6:11])
+    molecule_atom_numbers += [atom_number]
+line_out = 'TER\n'
+fp_p.write(line_out)
+for atom_number in molecule_atom_numbers:
+    if atom_number not in connect_dict:
+        continue
+    ans = connect_dict[atom_number] # ans: connected atom numbers
+    ans2 = list()
+    for an in ans:
+        if an in molecule_atom_numbers:
+            ans2 += [an]
+    num_conect = len(ans2)
+    line_out = ''
+    for i_con in range(num_conect):
+        if i_con % 4 == 0: # max CONECT items is four per line
+            line_out += 'CONECT%5d' % (atom_number)
+        line_out += '%5d' % (ans2[i_con])
+        if i_con % 4 == 3:
+            line_out += '\n'
+    if len(line_out.strip()) < 1:
+        continue
+    if line_out[-1] != '\n':
+        line_out += '\n'
+    fp_p.write(line_out)
+fp_p.close()
+
+### ligand file save
+ligand_name_list = ligand_line_dict.keys()
+for ligand_name in ligand_name_list:
+#    if ligand_name == 'HOH': # if Water is important interaction between protein and/or ligand, then need to collect the water and add it to protein structure
+#        continue
+    ligand_file = 'save_ligand_name_%s.pdb' %(ligand_name) # save ligand after protein-ligand separation 
+    fp_l = open(ligand_file, 'w')
+    ligand_line_list = ligand_line_dict[ligand_name]
+    molecule_atom_numbers = list()
+    for line in ligand_line_list :
+        fp_l.write(line)
+        atom_number = int(line[6:11])
+        molecule_atom_numbers += [atom_number]
+
+    for atom_number in molecule_atom_numbers:
+        if atom_number not in connect_dict:
+            continue
+        ans = connect_dict[atom_number]
+        ans2 = list()
+        for an in ans:
+            if an in molecule_atom_numbers:
+                ans2 += [an]
+        num_connect = len(ans2)
+        line_out = ''
+        for i_con in range(num_connect):
+            if i_con % 4 == 0:
+                line_out += 'CONECT%5d' % (atom_number)
+            line_out += '%5d' % (ans2[i_con])
+            if i_con % 4 == 3:
+                line_out += '\n'
+        if len(line_out.strip()) < 1:
+            continue
+        if line_out[-1] != '\n':
+            line_out += '\n'
+        fp_l.write(line_out)
+    fp_l.close()
