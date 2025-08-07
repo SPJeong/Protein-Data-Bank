@@ -1,0 +1,154 @@
+import os
+import numpy as np
+import gzip
+import matplotlib.pyplot as plt
+
+list_file = 'pdb_list_file.txt' # input pdb list file
+pdb_list = [x.strip().split() for x in open(list_file)]
+
+main_atom_list = [' N  ', ' CA ', ' C  ', ' O  '] # N: Nitrogen, CA: Alpha Carbon, C: Carbonyl Carbon, O: Carbonyl Oxygen
+Res_31 = {'ALA': 'A', 'CYS': 'C', 'ASP': 'D', 'GLU': 'E', 'PHE': 'F',
+         'GLY': 'G', 'HIS': 'H', 'ILE': 'I', 'LYS': 'K', 'LEU': 'L',
+         'MET': 'M', 'ASN': 'N', 'PRO': 'P', 'GLN': 'Q', 'ARG': 'R',
+         'SER': 'S', 'THR': 'T', 'VAL': 'V', 'TRP': 'W', 'TYR': 'Y', }
+res_list = Res_31.keys() # residue list
+
+def read_pdb(pdb_file):
+    fp = gzip.open(pdb_file) # gz pdb file 
+    lines = fp.readlines()
+    fp.close()
+    chain_dict = dict()
+    atom_coor_dict = dict()
+
+    check_m = False
+    modres_dict = dict() # modified residue
+    for line_b in lines:
+        line = line_b.decode('ascii') # gz file is compressed file, need to convert as ascii
+        if line[0:10] == 'REMARK 465':
+            if line[15:27] == 'RES C SSSEQI':
+                check_m = True
+                continue
+            if check_m:
+                res_name3 = line[15:18]
+                res_inser = line[22:27]
+                chain_id = line[19]
+                if chain_id not in chain_dict:
+                    chain_dict[chain_id] = dict()
+                    atom_coor_dict[chain_id] = dict()
+                chain_dict[chain_id][res_inser] = res_name3
+                atom_coor_dict[chain_id][res_inser] = dict()
+
+        elif line[0:6] == 'MODRES':
+            res_name3_mod = line[12:15]
+            res_name3 = line[24:27]
+            if res_name3_mod not in modres_dict and res_name3 in Res31:
+                modres_dict[res_name3_mod] = res_name3
+
+        elif line[0:6] == 'ATOM  ':
+            chain_id = line[21]
+            res_name3 = line[17:20]
+            res_inser = line[22:27]
+
+            alt_loc = line[16]
+            if alt_loc != ' ' and alt_loc != 'A': # ignoring any atoms that are part of an alternative conformation, ensuring only the primary conformation (indicated by ' ' or 'A') is processed. 
+                continue
+
+            if chain_id not in chain_dict:
+                chain_dict[chain_id] = dict()
+                atom_coor_dict[chain_id] = dict()
+            if res_name3 not in Res31:
+                continue
+            if res_inser not in chain_dict[chain_id]:
+                chain_dict[chain_id][res_inser] = res_name3
+                atom_coor_dict[chain_id][res_inser] = dict()
+
+            atom_name = line[12:16]
+
+            if atom_name in main_atom_list:
+                coor = (line[30:38], line[38:46], line[46:54])
+                coor = np.array(coor, dtype=np.float64)
+                atom_coor_dict[chain_id][res_inser][atom_name] = coor
+
+        elif line[0:6] == 'HETATM':
+            chain_id = line[21]
+            res_name3 = line[17:20]
+            res_inser = line[22:27]
+            alt_loc = line[16]
+            if alt_loc != ' ' and alt_loc != 'A':
+                continue
+
+            if chain_id not in chain_dict:
+                chain_dict[chain_id] = dict()
+                atom_coor_dict[chain_id] = dict()
+            if res_name3 not in modres_dict:
+                continue
+
+            if res_inser not in chain_dict[chain_id]:
+                chain_dict[chain_id][res_inser] = res_name3
+                atom_coor_dict[chain_id][res_inser] = dict()
+
+            atom_name = line[12:16]
+            if atom_name in main_atom_list:
+                coor = (line[30:38], line[38:46], line[46:54])
+                coor = np.array(coor, dtype=np.float64)
+                atom_coor_dict[chain_id][res_inser][atom_name] = coor
+
+    return chain_dict, atom_coor_dict, modres_dict
+
+
+def cal_single(chain_dict, atom_coor_dict, modres_dict, chain_id, ca_dist_dict):
+    keys = sorted(chain_dict[chain_id].keys())
+    num_keys = len(keys)
+    for i in range(num_keys):
+
+        key = keys[i]
+        res_name = chain_dict[chain_id][key]
+        if res_name in modres_dict:
+            res_name = modres_dict[res_name]
+
+        res_dict = atom_coor_dict[chain_id][key]
+        if ' CA ' in res_dict:
+            pos_ca = res_dict[' CA ']
+        else:
+            continue
+        for j in range(1,6):
+            if i+j <= num_keys-1:
+                key_j = keys[i+j]
+            else:
+                continue
+            res_j_dict = atom_coor_dict[chain_id][key_j]
+            if ' CA ' in res_j_dict:
+                pos_j_ca = res_j_dict[' CA ']
+                dist = np.linalg.norm(pos_ca - pos_j_ca)
+                ca_dist_dict[j] += [dist]
+
+### C alpha distance
+ca_dist_dict = dict() # C alpha distance
+for j in range(1,6):
+    ca_dist_dict[j] = list()
+
+num_pdb = len(pdb_list)
+for i in range(0, num_pdb):
+    pdb_id = pdb_list[i][0]
+    chain_id = pdb_list[i][1]
+    pdb_file = '%s/%s/%s.pdb.gz' % (data_dir, pdb_id[0], pdb_id)
+    if not os.path.exists(pdb_file):
+        print('No such file', pdb_file)
+        continue
+    chain_dict, atom_coor_dict, modres_dict = read_pdb(pdb_file)
+    cal_single(chain_dict, atom_coor_dict, modres_dict, chain_id, ca_dist_dict)
+
+
+# visualization
+'''
+bins = np.arange(2,5,0.1)
+a = plt.hist(ca_dist_dict[1], bins, density=True)
+bins = np.arange(3,8,0.1)
+a2 = plt.hist(ca_dist_dict[2], bins, density=True)
+bins = np.arange(3,12,0.1)
+a3 = plt.hist(ca_dist_dict[3], bins, density=True)
+bins = np.arange(3,15,0.1)
+a4 = plt.hist(ca_dist_dict[4], bins, density=True)
+bins = np.arange(3,18,0.1)
+a5 = plt.hist(ca_dist_dict[5], bins, density=True)
+'''
